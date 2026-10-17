@@ -1,0 +1,15 @@
+# Resultados e arquivos gerados pelo pipeline (cada um gera os seus)
+resultados/
+.snakemake/
+config/recursos.yaml
+
+# Referência descompactada e índices (gerados por scripts/preparar_referencia.sh)
+dados/referencia/*.fa
+dados/referencia/*.fa.*
+dados/referencia/*.dict
+!dados/referencia/*.fa.gz
+
+# Python
+__pycache__/
+*.pyc
+.venv/

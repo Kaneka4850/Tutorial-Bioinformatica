@@ -1,0 +1,3 @@
+# Scripts precisam de fim de linha Linux (LF), senão o bash falha no WSL.
+* text=auto eol=lf
+*.gz binary

@@ -1,0 +1,13 @@
+# Bibliotecas Python usadas no tutorial.
+# Instale com:  pip install -r requirements.txt
+
+# Orquestrador do pipeline (lê o arquivo Snakefile)
+snakemake>=9.0
+# Tabelas e contagens
+pandas>=2.2
+# Chamadas à API do VEP pela internet
+requests>=2.32
+# Leitura de RAM, núcleos e disco em scripts/verificar_recursos.py
+psutil>=6.0
+# Leitura dos arquivos .yaml de configuração
+pyyaml>=6.0

@@ -1,0 +1,20 @@
+# Ambiente conda com todas as ferramentas do pipeline (alternativa ao Docker).
+# Crie com:   conda env create -f environment.yml
+# Ative com:  conda activate bioinfo
+name: bioinfo
+channels:
+  - conda-forge
+  - bioconda
+  - nodefaults  # não usa o canal "defaults" da Anaconda (evita pedido de termos de uso)
+dependencies:
+  - python=3.13
+  - snakemake>=9
+  - fastqc
+  - bwa
+  - samtools
+  - bcftools
+  - gatk4
+  - pandas
+  - requests
+  - psutil
+  - pyyaml

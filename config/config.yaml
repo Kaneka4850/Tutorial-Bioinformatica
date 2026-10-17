@@ -1,0 +1,24 @@
+# =============================================================================
+# Configuração do pipeline
+# -----------------------------------------------------------------------------
+# Este é o único arquivo que você precisa editar para rodar o pipeline com
+# outras amostras. Os caminhos são relativos à pasta principal do repositório.
+# =============================================================================
+
+# Nome da amostra: aparece nos nomes dos arquivos de resultado e no BAM/VCF.
+amostra: "amostra"
+
+# Arquivos FASTQ paired-end (R1 = leitura "ida", R2 = leitura "volta").
+fastq_r1: "dados/amostra_R1.fastq"
+fastq_r2: "dados/amostra_R2.fastq"
+
+# Genoma de referência já descompactado e indexado pelo script
+# scripts/preparar_referencia.sh (ele cria este arquivo a partir do .fa.gz).
+referencia: "dados/referencia/chr6.fa"
+
+# Pasta onde todos os resultados serão gravados.
+pasta_resultados: "resultados"
+
+# Versão do genoma usada na anotação pelo VEP. Os dados deste tutorial estão
+# em hg19, que no Ensembl se chama GRCh37.
+build_genoma: "GRCh37"
