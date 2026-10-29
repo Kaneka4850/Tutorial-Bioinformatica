@@ -15,7 +15,9 @@ O que ele faz:
 """
 
 import os
+import platform
 import shutil
+import subprocess
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -65,6 +67,27 @@ def ler_memoria_do_linux() -> tuple[float, float]:
     return valores["MemTotal"] / GIB, valores["MemAvailable"] / GIB
 
 
+def ler_memoria_do_macos() -> tuple[float, float]:
+    """Lê RAM total (sysctl) e livre (vm_stat) no macOS (usado se o psutil faltar)."""
+    total = int(subprocess.run(["sysctl", "-n", "hw.memsize"], capture_output=True,
+                               text=True, check=True).stdout)
+    saida = subprocess.run(["vm_stat"], capture_output=True, text=True, check=True).stdout
+    tamanho_pagina = int(saida.split("page size of")[1].split()[0])
+    paginas = {}
+    for linha in saida.splitlines()[1:]:
+        chave, _, valor = linha.partition(":")
+        if valor.strip().rstrip(".").isdigit():
+            paginas[chave.strip()] = int(valor.strip().rstrip("."))
+    livres = sum(paginas.get(nome, 0) for nome in
+                 ("Pages free", "Pages inactive", "Pages speculative", "Pages purgeable"))
+    return total / GIB, livres * tamanho_pagina / GIB
+
+
+def estou_no_wsl() -> bool:
+    """True se o Python estiver rodando dentro do WSL (Linux dentro do Windows)."""
+    return "microsoft" in platform.release().lower()
+
+
 def ler_recursos() -> Recursos:
     """Coleta núcleos, threads, RAM e disco. Usa psutil se estiver instalado."""
     threads = os.cpu_count() or 1
@@ -79,7 +102,10 @@ def ler_recursos() -> Recursos:
     except ImportError:
         # Sem psutil não dá para saber os núcleos físicos com certeza.
         nucleos = threads
-        ram_total, ram_livre = ler_memoria_do_linux()
+        if sys.platform == "darwin":
+            ram_total, ram_livre = ler_memoria_do_macos()
+        else:
+            ram_total, ram_livre = ler_memoria_do_linux()
 
     return Recursos(nucleos, threads, ram_total, ram_livre, disco_livre)
 
@@ -97,7 +123,7 @@ def listar_avisos(recursos: Recursos, plano: Plano) -> list[str]:
     avisos = []
     if recursos.ram_total_gb < RAM_RECOMENDADA_GB:
         avisos.append(
-            f"Seu WSL enxerga só {recursos.ram_total_gb:.1f} GB de RAM. "
+            f"Seu sistema enxerga só {recursos.ram_total_gb:.1f} GB de RAM. "
             f"O recomendado é {RAM_RECOMENDADA_GB} GB. Feche o navegador e "
             "outros programas antes de rodar."
         )
@@ -129,11 +155,12 @@ def salvar_plano(plano: Plano) -> None:
 
 def mostrar_relatorio(recursos: Recursos, plano: Plano, avisos: list[str]) -> None:
     """Imprime na tela um resumo fácil de ler."""
+    onde = "vistos de dentro do WSL" if estou_no_wsl() else platform.system()
     print("=" * 60)
-    print(" Recursos do seu computador (vistos de dentro do WSL)")
+    print(f" Recursos do seu computador ({onde})")
     print("=" * 60)
     print(f" Núcleos físicos ........ {recursos.nucleos_fisicos}"
-          "  (no WSL pode aparecer igual às threads)")
+          + ("  (no WSL pode aparecer igual às threads)" if estou_no_wsl() else ""))
     print(f" Threads (lógicos) ...... {recursos.threads_logicas}")
     print(f" RAM total .............. {recursos.ram_total_gb:.1f} GB")
     print(f" RAM disponível agora ... {recursos.ram_disponivel_gb:.1f} GB")
@@ -149,9 +176,10 @@ def mostrar_relatorio(recursos: Recursos, plano: Plano, avisos: list[str]) -> No
             print(f"   - {aviso}")
     else:
         print(" Tudo certo! Seu computador aguenta o pipeline tranquilo.")
-    print("-" * 60)
-    print(" Dica: o WSL usa no máximo metade da RAM do Windows. Para mudar isso,")
-    print(" veja a seção 'Limitar a memória do WSL' no README.")
+    if estou_no_wsl():
+        print("-" * 60)
+        print(" Dica: o WSL usa no máximo metade da RAM do Windows. Para mudar isso,")
+        print(" veja a seção 'Limitar a memória do WSL' no README.")
 
 
 def main() -> int:

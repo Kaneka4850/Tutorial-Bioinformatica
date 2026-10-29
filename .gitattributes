@@ -1,3 +1,5 @@
 # Scripts precisam de fim de linha Linux (LF), senão o bash falha no WSL.
 * text=auto eol=lf
+# O PowerShell do Windows lê melhor scripts com fim de linha do Windows (CRLF).
+*.ps1 text eol=crlf
 *.gz binary

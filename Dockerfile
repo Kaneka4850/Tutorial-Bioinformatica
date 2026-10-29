@@ -7,6 +7,10 @@
 #
 # Construir:  docker build -t tutorial-bioinfo .
 # (o script scripts/rodar_pipeline.sh já faz isso por você)
+#
+# A imagem base existe para processadores Intel/AMD (amd64) e ARM (arm64,
+# Macs com chip Apple). Para forçar Intel num Mac Apple, use:
+#   docker build --platform linux/amd64 -t tutorial-bioinfo .
 # =============================================================================
 
 # micromamba é uma versão leve do conda, feita para usar dentro do Docker.

@@ -13,12 +13,22 @@
 #   4. Prepara a referência (scripts/preparar_referencia.sh) dentro do Docker.
 #   5. Roda o Snakemake dentro do Docker, com limite de CPU e memória, para o
 #      computador não travar.
+#
+# Mac com chip Apple (M1, M2, M3...): se a construção da imagem falhar por
+# falta de algum pacote para ARM, rode emulando um processador Intel:
+#     PLATAFORMA_DOCKER=linux/amd64 bash scripts/rodar_pipeline.sh
 # =============================================================================
 
 set -euo pipefail
 
 IMAGEM="tutorial-bioinfo"
 ARQUIVO_RECURSOS="config/recursos.yaml"
+# Vazio = arquitetura nativa do computador. Ex.: linux/amd64 no Mac Apple.
+PLATAFORMA_DOCKER="${PLATAFORMA_DOCKER:-}"
+OPCAO_PLATAFORMA=()
+if [[ -n "$PLATAFORMA_DOCKER" ]]; then
+    OPCAO_PLATAFORMA=(--platform "$PLATAFORMA_DOCKER")
+fi
 
 # Sempre trabalha a partir da pasta principal do repositório.
 cd "$(dirname "$0")/.."
@@ -35,8 +45,20 @@ conferir_docker() {
     fi
     if ! docker info > /dev/null 2>&1; then
         echo "ERRO: o Docker está instalado mas não está ligado (ou sem permissão)." >&2
-        echo "Tente: sudo service docker start   e depois rode este script de novo." >&2
+        echo "No Windows/Mac com Docker Desktop: abra o Docker Desktop e espere ele ficar verde." >&2
+        echo "No WSL, confira Settings > Resources > WSL integration > Ubuntu-22.04 ligado." >&2
+        echo "Com Docker Engine no Ubuntu: sudo service docker start" >&2
         exit 1
+    fi
+}
+
+# Usa o Python do ambiente virtual do projeto (.venv) se existir, porque ele
+# tem o psutil. Senão, usa o python3 do sistema.
+escolher_python() {
+    if [[ -x .venv/bin/python ]]; then
+        echo .venv/bin/python
+    else
+        echo python3
     fi
 }
 
@@ -51,7 +73,7 @@ ler_recurso() {
 # porque o seu usuário não existe dentro do container (senão o Java cria uma
 # pasta "?" no repositório).
 rodar_no_docker() {
-    docker run --rm \
+    docker run --rm ${OPCAO_PLATAFORMA[@]+"${OPCAO_PLATAFORMA[@]}"} \
         --cpus "$THREADS" \
         --memory "${MEMORIA_GB}g" \
         --user "$(id -u):$(id -g)" \
@@ -67,12 +89,18 @@ main() {
     conferir_docker
 
     informar "2/5 Medindo os recursos do computador"
-    python3 scripts/verificar_recursos.py
+    "$(escolher_python)" scripts/verificar_recursos.py
     THREADS="$(ler_recurso threads)"
     MEMORIA_GB="$(ler_recurso memoria_gb)"
 
     informar "3/5 Construindo a imagem Docker (na primeira vez leva alguns minutos)"
-    docker build -t "$IMAGEM" .
+    if ! docker build ${OPCAO_PLATAFORMA[@]+"${OPCAO_PLATAFORMA[@]}"} -t "$IMAGEM" .; then
+        echo "ERRO: a imagem Docker não foi construída. Confira a internet." >&2
+        if [[ "$(uname -s)" == "Darwin" && "$(uname -m)" == "arm64" ]]; then
+            echo "Mac Apple: tente  PLATAFORMA_DOCKER=linux/amd64 bash scripts/rodar_pipeline.sh" >&2
+        fi
+        exit 1
+    fi
 
     informar "4/5 Preparando o genoma de referência"
     rodar_no_docker bash scripts/preparar_referencia.sh

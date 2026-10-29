@@ -41,10 +41,13 @@ TENTATIVAS_MAXIMAS = 5       # quantas vezes tentar de novo se a API falhar
 TEMPO_LIMITE_SEGUNDOS = 120  # tempo máximo de espera por resposta
 PAUSA_ENTRE_PEDIDOS = 0.5    # respeita o limite de pedidos por segundo
 CABECALHOS = {"Content-Type": "application/json", "Accept": "application/json"}
+# Informações extras pedidas ao VEP: nomes HGVS (c. e p.), número do exon/íntron,
+# transcrito canônico e MANE (o transcrito padrão usado na clínica).
+OPCOES_VEP = {"hgvs": 1, "numbers": 1, "canonical": 1, "mane": 1}
 
 COLUNAS_TSV = [
-    "cromossomo", "posicao", "ref", "alt", "gene",
-    "consequencia", "impacto", "ids_conhecidos", "significancia_clinica",
+    "cromossomo", "posicao", "ref", "alt", "gene", "transcrito", "exon",
+    "hgvs_c", "hgvs_p", "consequencia", "impacto", "ids_conhecidos", "significancia_clinica",
 ]
 
 
@@ -77,7 +80,7 @@ def consultar_vep(url: str, lote: list[str]) -> list[dict]:
     Se a API pedir para esperar (erro 429) ou estiver instável (erro 5xx),
     espera e tenta de novo, aumentando o tempo a cada tentativa.
     """
-    corpo = {"variants": lote}
+    corpo = {"variants": lote, **OPCOES_VEP}
     for tentativa in range(1, TENTATIVAS_MAXIMAS + 1):
         try:
             resposta = requests.post(url, headers=CABECALHOS, json=corpo,
@@ -130,11 +133,13 @@ def resumir_anotacao(anotacao: dict) -> dict:
     """Transforma a resposta do VEP em uma linha simples para a tabela TSV."""
     cromossomo, posicao, _, ref, alt = anotacao["input"].split()[:5]
     transcritos = anotacao.get("transcript_consequences", [])
-    # O primeiro transcrito com o efeito mais grave representa a variante.
+    # Representa a variante pelo transcrito com o efeito mais grave, dando
+    # preferência ao transcrito canônico do gene (o mais usado em laudos).
     mais_grave = anotacao.get("most_severe_consequence", "")
+    com_efeito_grave = [t for t in transcritos if mais_grave in t.get("consequence_terms", [])]
     principal = next(
-        (t for t in transcritos if mais_grave in t.get("consequence_terms", [])),
-        transcritos[0] if transcritos else {},
+        (t for t in com_efeito_grave if t.get("canonical")),
+        com_efeito_grave[0] if com_efeito_grave else (transcritos[0] if transcritos else {}),
     )
     ids = [c["id"] for c in anotacao.get("colocated_variants", []) if "id" in c]
     return {
@@ -143,6 +148,11 @@ def resumir_anotacao(anotacao: dict) -> dict:
         "ref": ref,
         "alt": alt,
         "gene": principal.get("gene_symbol", ""),
+        "transcrito": principal.get("transcript_id", ""),
+        # "23/24" = exon 23 de 24. Para variantes em íntron vem o número do íntron.
+        "exon": principal.get("exon") or (f"íntron {principal['intron']}" if principal.get("intron") else ""),
+        "hgvs_c": principal.get("hgvsc", "").partition(":")[2],
+        "hgvs_p": principal.get("hgvsp", "").partition(":")[2],
         "consequencia": mais_grave,
         "impacto": principal.get("impact", ""),
         "ids_conhecidos": ",".join(ids),

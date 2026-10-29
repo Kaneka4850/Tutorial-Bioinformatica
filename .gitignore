@@ -2,6 +2,7 @@
 resultados/
 .snakemake/
 config/recursos.yaml
+instalacao/*.log
 
 # Referência descompactada e índices (gerados por scripts/preparar_referencia.sh)
 dados/referencia/*.fa

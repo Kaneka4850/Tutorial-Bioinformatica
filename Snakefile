@@ -71,6 +71,8 @@ rule todas:
         nome_relatorio_fastqc(R1),
         nome_relatorio_fastqc(R2),
         f"{RES}/02_alinhamento/{AMOSTRA}.flagstat.txt",
+        f"{RES}/02_alinhamento/{AMOSTRA}.cram",
+        f"{RES}/03_variantes/{AMOSTRA}.stats.txt",
         f"{RES}/05_contagem/{AMOSTRA}.contagem.csv",
 
 
@@ -131,11 +133,42 @@ rule estatisticas_alinhamento:
         "samtools flagstat {input.bam} > {output}"
 
 
+# Comparação didática: o mesmo alinhamento em CRAM. O CRAM guarda só as
+# diferenças em relação à referência, por isso fica bem menor que o BAM, mas
+# precisa da referência para ser lido. Compare: ls -lh resultados/02_alinhamento/
+rule converter_cram:
+    input:
+        bam=rules.marcar_duplicatas.output.bam,
+    output:
+        cram=f"{RES}/02_alinhamento/{AMOSTRA}.cram",
+        crai=f"{RES}/02_alinhamento/{AMOSTRA}.cram.crai",
+    params:
+        referencia=REFERENCIA,
+    shell:
+        "samtools view -C -T {params.referencia} -o {output.cram} {input.bam}"
+        " && samtools index {output.cram}"
+
+
+# Arquivo BED com as regiões onde há leituras alinhadas. O BED usa contagem
+# a partir de 0 e o fim não entra no intervalo: "chr6 100 200" são as bases
+# 101 a 200. Juntamos leituras a menos de 500 pb umas das outras em uma região.
+rule gerar_bed:
+    input:
+        bam=rules.marcar_duplicatas.output.bam,
+    output:
+        bed=f"{RES}/02_alinhamento/{AMOSTRA}.regioes.bed",
+    shell:
+        "bedtools bamtobed -i {input.bam} | bedtools merge -d 500 -i - > {output.bed}"
+
+
 # Etapa 4: chama variantes (SNVs e indels) com o GATK HaplotypeCaller.
+# Com -L o GATK olha só as regiões do BED (mais 100 pb de margem), em vez do
+# cromossomo 6 inteiro. É o mesmo que se faz com o BED de um painel ou exoma.
 rule chamar_variantes:
     input:
         bam=rules.marcar_duplicatas.output.bam,
         bai=rules.marcar_duplicatas.output.bai,
+        bed=rules.gerar_bed.output.bed,
     output:
         vcf=f"{RES}/03_variantes/{AMOSTRA}.vcf.gz",
     params:
@@ -144,6 +177,7 @@ rule chamar_variantes:
     shell:
         "gatk --java-options '{JAVA_OPCOES}' HaplotypeCaller"
         " -R {params.referencia} -I {input.bam} -O {output.vcf}"
+        " -L {input.bed} --interval-padding 100"
         " --native-pair-hmm-threads {threads}"
 
 
@@ -159,6 +193,16 @@ rule normalizar_variantes:
     shell:
         "bcftools norm -m-any -f {params.referencia} -Oz -o {output.vcf} {input.vcf}"
         " && bcftools index -t {output.vcf}"
+
+
+# Estatísticas do VCF: quantos SNVs e indels, razão Ti/Tv etc.
+rule estatisticas_vcf:
+    input:
+        vcf=rules.normalizar_variantes.output.vcf,
+    output:
+        f"{RES}/03_variantes/{AMOSTRA}.stats.txt",
+    shell:
+        "bcftools stats {input.vcf} > {output}"
 
 
 # Etapa 6: anota as variantes pela API do VEP (precisa de internet).

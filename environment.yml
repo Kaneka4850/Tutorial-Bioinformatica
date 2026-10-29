@@ -13,6 +13,7 @@ dependencies:
   - bwa
   - samtools
   - bcftools
+  - bedtools
   - gatk4
   - pandas
   - requests
